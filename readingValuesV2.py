@@ -1,3 +1,6 @@
+# Author: Prathic 
+# Version: 2.0 
+# Instructables Battery Powered Competition 
 import serial
 from datetime import datetime
 import csv
@@ -11,8 +14,8 @@ def notify(title, text):
 
 # creates resources folder if it doesn't exist
 def checkResource():
-   if not os.path.exists('resources2'):
-        os.mkdir('resources2')
+   if not os.path.exists('resources'):
+        os.mkdir('resources')
 
 def begWriter():
     checkResource()
@@ -38,38 +41,51 @@ serial_port = '/dev/tty.HC-06-DevB' # bluetooth shield hc-06
 counter = 1
 lastNofic = 0
 flag  = True
-total = 0
-distance_wall = 1000
+distance_wall = 30 #VARIABLE that determines when the sensor goes off
 if __name__ == '__main__':
     csvWriter, csvFile = begWriter()
     print("connecting to serial port ...")
-    ser = serial.Serial(serial_port, serial_speed, timeout=10)
+    x=os.system("ls /dev/tty.HC-06-DevB")
+    if x!=0:
+        raise ValueError('The bluetooth module is not connected')
+    ser = serial.Serial(serial_port, serial_speed, timeout=10)   
     str2 = "Test_" + str(counter)
     ser.flushInput()
     recordedValue = {'counter': [], 'valueRecord': [], 'hour': [], 'minute': [], 'second': []}
     ser.write(str.encode(str2))
+    data = ser.readline()  
+    if counter == 1 and data != "" and data != " ":
+        currRecordedValue = data.decode().rstrip()  
+        if currRecordedValue == "":
+            flag = False
+        while not flag:
+            print('Switch is off currently')
+            data = ser.readline()
+            currRecordedValue = data.decode().rstrip()   
+            if (currRecordedValue != "" and currRecordedValue != " "):
+                print('Switch is turned back on')
+                flag = True
     while flag:
-        print("recieving message from arduino ...")
         if (datetime.now().hour > 12):
             hour = datetime.now().hour - 12
         else:
             hour = datetime.now().hour
         min = datetime.now().minute
         secs = datetime.now().second
-        data = ser.readline()
-        #print(data)
-        #time.sleep(1/(9600 * 2))
+        data = ser.readline()        
         if (data != "" and data != " "):
-            currRecordedValue = data.decode().rstrip()   
+            currRecordedValue = data.decode().rstrip()  
+            if currRecordedValue == "":
+                flag = False
             if float(currRecordedValue) == float(-1000):
-                print('Entering')
-                flag = False                 
-            total = total + float(currRecordedValue)
-            print('Curr Value', currRecordedValue, 'Counter', counter, 'lastNotific', lastNofic)
-            if (float(currRecordedValue) > distance_wall and counter - lastNofic > 20):
-                notfStr = "Sensor has been activated: " + str(currRecordedValue) + " cms"
+                print('Switch turned off')
+                flag = False        
+            if counter % 50 == 0:
+                print('ID: ', counter,'Curr Value: ', currRecordedValue, 'lastNotific: ', lastNofic)
+            if (float(currRecordedValue) < distance_wall and counter - lastNofic > 250 and currRecordedValue != -1000):
+                notfStr = "[" + str(hour) + ":"  + str(min) + ":" + str(secs) + "] " + "Sensor Activation- " + str(currRecordedValue) + " cms"
                 lastNofic = counter
-                notify("Ultrasonic Sensor", notfStr)
+                notify("Security Sensor #1", notfStr)
             if min/10 == 0:
                 min = str(0) + str(min)
             recordedValue = appending(recordedValue, counter, currRecordedValue, hour, min, secs)
@@ -78,15 +94,11 @@ if __name__ == '__main__':
             print ("arduino doesnt respond")
         counter = counter + 1
         str2 = "Test_" + str(counter)
-        #ser.write(str.encode(str2))
         while not flag:
-            print('Entering2')
+            print('Switch is still turned off')
             data = ser.readline()
             currRecordedValue = data.decode().rstrip()   
-            #if (data != "" and data != " " and float(currRecordedValue) != float(-1000)):
-            if (data != "" and data != " "):
-                print(data)
+            if (currRecordedValue != "" and currRecordedValue != " "):
                 flag = True
-
     ser.close()
     csvFile.close()
